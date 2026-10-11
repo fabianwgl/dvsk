@@ -25,7 +25,13 @@ Dvsk changes each display's gamma tables, the same way f.lux does. It is a proof
 
 ## Install
 
-Download `Dvsk-<version>.dmg`, open it and drag Dvsk to Applications.
+With [Homebrew](https://brew.sh):
+
+```sh
+brew install --cask fabianwgl/tap/dvsk
+```
+
+Or download `Dvsk-<version>.dmg` from [Releases](https://github.com/fabianwgl/dvsk/releases), open it and drag Dvsk to Applications.
 
 Dvsk isn't notarized, so macOS blocks it the first time you open it. To allow it, try to open it once, then go to System Settings → Privacy & Security and click "Open Anyway" (macOS 15 or later). Or remove the quarantine flag in Terminal:
 

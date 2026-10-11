@@ -14,3 +14,18 @@ jobs:
         run: swift build
       - name: Test
         run: swift test
+
+  # Builds the installable DMG so a pull request's change can be downloaded and tried.
+  package:
+    if: github.event_name == 'pull_request'
+    needs: test
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build app and DMG
+        run: ./scripts/bundle.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Dvsk-pr-${{ github.event.pull_request.number }}
+          path: build/Dvsk-*.dmg
+          retention-days: 14
