@@ -30,7 +30,7 @@ xattr -dr com.apple.quarantine /Applications/Dvsk.app
 ## Build and run
 
 ```sh
-git clone <repo-url> dvsk && cd dvsk
+git clone https://github.com/fabianwgl/dvsk.git && cd dvsk
 swift run Dvsk
 ```
 
