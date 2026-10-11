@@ -33,11 +33,7 @@ brew install --cask fabianwgl/tap/dvsk
 
 Or download `Dvsk-<version>.dmg` from [Releases](https://github.com/fabianwgl/dvsk/releases), open it and drag Dvsk to Applications.
 
-Dvsk isn't notarized, so macOS blocks it the first time you open it. To allow it, try to open it once, then go to System Settings → Privacy & Security and click "Open Anyway" (macOS 15 or later). Or remove the quarantine flag in Terminal:
-
-```sh
-xattr -dr com.apple.quarantine /Applications/Dvsk.app
-```
+Release builds are signed with a Developer ID and notarized by Apple, so macOS opens them without the "could not verify" block.
 
 ## Build and run
 
@@ -51,6 +47,12 @@ To build the app and a DMG yourself (universal, ad-hoc signed, with no Dock icon
 ```sh
 ./scripts/bundle.sh
 open build/Dvsk.app    # or open build/Dvsk-<version>.dmg to install
+```
+
+To build a signed and notarized release DMG, set a Developer ID Application identity and a [notarytool keychain profile](https://developer.apple.com/documentation/security/customizing-the-notarization-workflow):
+
+```sh
+DEVELOPER_ID="Developer ID Application: Your Name (TEAMID)" NOTARY_PROFILE=dvsk-notary ./scripts/bundle.sh
 ```
 
 To run the tests:

@@ -22,10 +22,5 @@ cask "dvsk" do
   uninstall quit: "dev.fwgl.dvsk"
 
   zap trash: "~/Library/Preferences/dev.fwgl.dvsk.plist"
-
-  caveats <<~EOS
-    Dvsk is not notarized, so macOS blocks the first launch. Allow it with:
-      xattr -dr com.apple.quarantine #{appdir}/Dvsk.app
-  EOS
 end
 CASK
