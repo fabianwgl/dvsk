@@ -4,7 +4,7 @@ import DvskCore
 final class MenuController: NSObject, NSMenuDelegate {
     private let engine: Engine
     private let preferences: Preferences
-    private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+    private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let menu = NSMenu()
 
     private let statusLabelItem = NSMenuItem()
@@ -88,13 +88,19 @@ final class MenuController: NSObject, NSMenuDelegate {
         let image = NSImage(systemSymbolName: symbol, accessibilityDescription: "Dvsk")
         image?.isTemplate = true
         statusItem.button?.image = image
+        statusItem.button?.imagePosition = .imageLeading
+        // While paused, a countdown sits beside the unchanged icon.
+        let countdown = pausedMinutesLeft.map { " \($0)m" } ?? ""
+        statusItem.button?.attributedTitle = NSAttributedString(
+            string: countdown,
+            attributes: [.font: NSFont.monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)])
 
         switch resolved.mode {
         case .disabled:
             statusLabelItem.title = "Disabled"
         case .paused:
             let until = preferences.pausedUntil.map { Self.timeFormatter.string(from: $0) } ?? ""
-            statusLabelItem.title = "Paused until \(until)"
+            statusLabelItem.title = "Paused: \(pausedMinutesLeft ?? 0) min left (until \(until))"
         case .darkroom:
             statusLabelItem.title = "Darkroom"
         case .scheduled:
@@ -105,6 +111,13 @@ final class MenuController: NSObject, NSMenuDelegate {
         darkroomItem.state = preferences.isDarkroom ? .on : .off
         pauseItem.title = isPaused ? "Resume" : "Disable for an hour"
         pauseItem.isEnabled = preferences.isEnabled
+    }
+
+    /// Whole minutes left in the pause, rounded up so it never shows 0m while still paused.
+    private var pausedMinutesLeft: Int? {
+        guard let until = preferences.pausedUntil, preferences.isEnabled else { return nil }
+        let remaining = until.timeIntervalSinceNow
+        return remaining > 0 ? Int((remaining / 60).rounded(.up)) : nil
     }
 
     private var isPaused: Bool {
