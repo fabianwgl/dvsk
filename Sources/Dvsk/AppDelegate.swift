@@ -8,6 +8,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         installSignalHandlers()
+        preferences.pausedUntil = nil // a pause never survives a relaunch
         menuController = MenuController(engine: engine, preferences: preferences)
         engine.start()
     }

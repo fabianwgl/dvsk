@@ -130,6 +130,7 @@ final class MenuController: NSObject, NSMenuDelegate {
     }
 
     @objc private func toggleDarkroom() {
+        preferences.pausedUntil = nil
         preferences.isDarkroom.toggle()
     }
 
@@ -140,6 +141,7 @@ final class MenuController: NSObject, NSMenuDelegate {
     @objc private func sliderChanged() {
         let kelvin = (slider.doubleValue / 10).rounded() * 10
         sliderTitle.stringValue = "Night temperature: \(Int(kelvin))K"
+        preferences.pausedUntil = nil // touching the slider means "show me", so end any pause
         preferences.nightKelvin = kelvin
         engine.preview(kelvin: kelvin)
     }
