@@ -1,5 +1,11 @@
 # Dvsk
 
+[![CI](https://github.com/fabianwgl/dvsk/actions/workflows/ci.yml/badge.svg)](https://github.com/fabianwgl/dvsk/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/fabianwgl/dvsk)](https://github.com/fabianwgl/dvsk/releases/latest)
+[![License: MIT](https://img.shields.io/github/license/fabianwgl/dvsk)](LICENSE)
+![macOS 15+](https://img.shields.io/badge/macOS-15%2B-black?logo=apple)
+![Swift 6](https://img.shields.io/badge/Swift-6-F05138?logo=swift&logoColor=white)
+
 An open-source alternative to [f.lux](https://justgetflux.com) for macOS: a small menu bar app that makes your screen warmer in the evening.
 
 Dvsk changes each display's gamma tables, the same way f.lux does. It is a proof of concept, kept small and readable.
