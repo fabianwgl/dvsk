@@ -6,6 +6,8 @@
 	<string>Dvsk</string>
 	<key>CFBundleExecutable</key>
 	<string>Dvsk</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
 	<key>CFBundleIdentifier</key>
 	<string>dev.fwgl.dvsk</string>
 	<key>CFBundleName</key>

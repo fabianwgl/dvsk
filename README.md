@@ -14,8 +14,18 @@ Dvsk changes each display's gamma tables, the same way f.lux does. It is a proof
 
 ## Requirements
 
-- macOS 15 or later
-- Xcode 16 or the Swift 6 toolchain
+- macOS 15 or later (Apple Silicon or Intel)
+- To build from source: Xcode 16 or the Swift 6 toolchain
+
+## Install
+
+Download `Dvsk-<version>.dmg`, open it and drag Dvsk to Applications.
+
+Dvsk isn't notarized, so macOS blocks it the first time you open it. To allow it, try to open it once, then go to System Settings → Privacy & Security and click "Open Anyway" (macOS 15 or later). Or remove the quarantine flag in Terminal:
+
+```sh
+xattr -dr com.apple.quarantine /Applications/Dvsk.app
+```
 
 ## Build and run
 
@@ -24,11 +34,11 @@ git clone <repo-url> dvsk && cd dvsk
 swift run Dvsk
 ```
 
-To build a standalone app (ad-hoc signed, with no Dock icon):
+To build the app and a DMG yourself (universal, ad-hoc signed, with no Dock icon):
 
 ```sh
 ./scripts/bundle.sh
-open build/Dvsk.app
+open build/Dvsk.app    # or open build/Dvsk-<version>.dmg to install
 ```
 
 To run the tests:
@@ -43,6 +53,12 @@ If Dvsk crashes or is force-killed, your colours may not come back. To restore t
 
 ```sh
 swift run Dvsk --reset
+```
+
+Or, if you installed the app:
+
+```sh
+/Applications/Dvsk.app/Contents/MacOS/Dvsk --reset
 ```
 
 ## Known limitations
