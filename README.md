@@ -33,7 +33,7 @@ brew install --cask fabianwgl/tap/dvsk
 
 Or download `Dvsk-<version>.dmg` from [Releases](https://github.com/fabianwgl/dvsk/releases), open it and drag Dvsk to Applications.
 
-Release builds are signed with a Developer ID and notarized by Apple, so they open without any Gatekeeper warnings.
+Release builds are signed with a Developer ID and notarized by Apple, so macOS opens them without the "could not verify" block.
 
 ## Build and run
 

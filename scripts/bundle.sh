@@ -4,7 +4,7 @@
 #
 # For a release build, set:
 #   DEVELOPER_ID    a "Developer ID Application" signing identity, to sign the app and DMG
-#   NOTARY_PROFILE  a notarytool keychain profile, to also notarize and staple the DMG
+#   NOTARY_PROFILE  a notarytool keychain profile, to also notarize and staple the app and DMG
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -20,6 +20,19 @@ if [[ -n "$NOTARY_PROFILE" && -z "$IDENTITY" ]]; then
     echo "NOTARY_PROFILE needs DEVELOPER_ID: only Developer ID signed builds can be notarized." >&2
     exit 1
 fi
+
+# Submits a file to Apple's notary service and fails with Apple's log unless it is accepted.
+notarize() {
+    echo "Notarizing $1 (usually a few minutes)..."
+    local result status
+    result=$(xcrun notarytool submit "$1" --keychain-profile "$NOTARY_PROFILE" --wait --output-format json)
+    status=$(plutil -extract status raw - <<< "$result")
+    if [[ "$status" != "Accepted" ]]; then
+        echo "Notarization of $1 finished with status: $status" >&2
+        xcrun notarytool log "$(plutil -extract id raw - <<< "$result")" --keychain-profile "$NOTARY_PROFILE" >&2
+        exit 1
+    fi
+}
 
 # Prefer a universal (arm64 + x86_64) build; fall back to the native arch.
 ARCHS=(--arch arm64 --arch x86_64)
@@ -44,6 +57,14 @@ else
     codesign --force --deep --sign - "$APP"
 fi
 
+if [[ -n "$NOTARY_PROFILE" ]]; then
+    # Staple the app itself too, so it opens offline once dragged out of the DMG.
+    ditto -c -k --keepParent "$APP" build/Dvsk.zip
+    notarize build/Dvsk.zip
+    rm build/Dvsk.zip
+    xcrun stapler staple "$APP"
+fi
+
 rm -rf "$STAGING" "$DMG"
 mkdir -p "$STAGING"
 cp -R "$APP" "$STAGING/"
@@ -56,14 +77,7 @@ if [[ -n "$IDENTITY" ]]; then
 fi
 
 if [[ -n "$NOTARY_PROFILE" ]]; then
-    echo "Notarizing $DMG (usually a few minutes)..."
-    RESULT=$(xcrun notarytool submit "$DMG" --keychain-profile "$NOTARY_PROFILE" --wait --output-format json)
-    STATUS=$(plutil -extract status raw - <<< "$RESULT")
-    if [[ "$STATUS" != "Accepted" ]]; then
-        echo "Notarization finished with status: $STATUS" >&2
-        xcrun notarytool log "$(plutil -extract id raw - <<< "$RESULT")" --keychain-profile "$NOTARY_PROFILE" >&2
-        exit 1
-    fi
+    notarize "$DMG"
     xcrun stapler staple "$DMG"
     spctl --assess --type open --context context:primary-signature --verbose "$DMG"
 fi
