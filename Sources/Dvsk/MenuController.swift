@@ -82,13 +82,9 @@ final class MenuController: NSObject, NSMenuDelegate {
     // MARK: - Refresh
 
     private func refresh(_ resolved: ResolvedState) {
-        let night = resolved.kelvin.map { $0 < (preferences.dayKelvin + preferences.nightKelvin) / 2 } ?? false
-        let symbol: String
-        switch resolved.mode {
-        case .disabled, .paused: symbol = "moon.slash"
-        case .darkroom: symbol = "moon"
-        case .scheduled: symbol = night ? "moon" : "sun.max"
-        }
+        // Follows the clock schedule only, so disabling or pausing never changes the icon.
+        let night = preferences.state.schedule.nightWeight(at: Date()) >= 0.5
+        let symbol = resolved.mode == .darkroom || night ? "moon" : "sun.max"
         let image = NSImage(systemSymbolName: symbol, accessibilityDescription: "Dvsk")
         image?.isTemplate = true
         statusItem.button?.image = image
