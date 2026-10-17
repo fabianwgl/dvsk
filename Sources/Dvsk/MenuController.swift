@@ -14,6 +14,16 @@ final class MenuController: NSObject, NSMenuDelegate {
     private let slider = NSSlider(value: 2700, minValue: 1200, maxValue: 6500, target: nil, action: nil)
     private let darkroomItem = NSMenuItem(title: "Darkroom", action: #selector(toggleDarkroom), keyEquivalent: "")
     private let pauseItem = NSMenuItem(title: "Disable for an hour", action: #selector(togglePause), keyEquivalent: "")
+    private let backlightItem = NSMenuItem()
+    private let backlightTitle = NSTextField(labelWithString: "")
+    private let backlightSlider = NSSlider(value: 0, minValue: 0, maxValue: 100, target: nil, action: nil)
+    private let backlightAutoItem = NSMenuItem(title: "Adjust keyboard in low light", action: #selector(toggleBacklightAuto), keyEquivalent: "")
+    private let backlightSeparator = NSMenuItem.separator()
+    private let backlight = KeyboardBacklight()
+
+    // Where macOS draws standard menu item titles and the end of the key-equivalent column.
+    private static let leadingInset: CGFloat = 27
+    private static let trailingInset: CGFloat = 13
     private var settingsWindow: SettingsWindowController?
 
     init(engine: Engine, preferences: Preferences) {
@@ -37,7 +47,10 @@ final class MenuController: NSObject, NSMenuDelegate {
         enabledItem.target = self
         menu.addItem(enabledItem)
 
-        sliderItem.view = makeSliderView()
+        slider.target = self
+        slider.action = #selector(sliderChanged)
+        sliderItem.view = makeSliderView(label: sliderTitle, slider: slider)
+        syncSlider()
         menu.addItem(sliderItem)
 
         darkroomItem.target = self
@@ -46,6 +59,16 @@ final class MenuController: NSObject, NSMenuDelegate {
         pauseItem.target = self
         menu.addItem(pauseItem)
         menu.addItem(.separator())
+
+        backlightSlider.target = self
+        backlightSlider.action = #selector(backlightChanged)
+        backlightItem.view = makeSliderView(label: backlightTitle, slider: backlightSlider)
+        menu.addItem(backlightItem)
+
+        backlightAutoItem.target = self
+        menu.addItem(backlightAutoItem)
+        menu.addItem(backlightSeparator)
+        syncBacklight()
 
         let settings = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
         settings.target = self
@@ -56,27 +79,41 @@ final class MenuController: NSObject, NSMenuDelegate {
         menu.addItem(quit)
     }
 
-    private func makeSliderView() -> NSView {
+    private func makeSliderView(label: NSTextField, slider: NSSlider) -> NSView {
         let width: CGFloat = 250
+        let inner = width - Self.leadingInset - Self.trailingInset
         let container = NSView(frame: NSRect(x: 0, y: 0, width: width, height: 48))
+        container.autoresizingMask = [.width]
 
-        sliderTitle.font = .menuFont(ofSize: 13)
-        sliderTitle.frame = NSRect(x: 14, y: 28, width: width - 28, height: 16)
-        container.addSubview(sliderTitle)
+        label.font = .menuFont(ofSize: 13)
+        label.frame = NSRect(x: Self.leadingInset, y: 28, width: inner, height: 16)
+        label.autoresizingMask = [.width]
+        container.addSubview(label)
 
         slider.isContinuous = true
-        slider.target = self
-        slider.action = #selector(sliderChanged)
-        slider.frame = NSRect(x: 14, y: 6, width: width - 28, height: 20)
+        slider.frame = NSRect(x: Self.leadingInset, y: 6, width: inner, height: 20)
+        slider.autoresizingMask = [.width]
         container.addSubview(slider)
 
-        syncSlider()
         return container
     }
 
     private func syncSlider() {
         slider.doubleValue = preferences.nightKelvin
         sliderTitle.stringValue = "Night temperature: \(Int(preferences.nightKelvin))K"
+    }
+
+    /// Re-read on every open: the keyboard brightness keys change it behind our back.
+    private func syncBacklight() {
+        let available = backlight.isAvailable
+        backlightItem.isHidden = !available
+        backlightAutoItem.isHidden = !available
+        backlightSeparator.isHidden = !available
+        guard available else { return }
+        let percent = Int((backlight.brightness * 100).rounded())
+        backlightSlider.doubleValue = Double(percent)
+        backlightTitle.stringValue = "Keyboard backlight: \(percent)%"
+        backlightAutoItem.state = backlight.isAutoBrightnessEnabled ? .on : .off
     }
 
     // MARK: - Refresh
@@ -133,6 +170,7 @@ final class MenuController: NSObject, NSMenuDelegate {
 
     func menuNeedsUpdate(_ menu: NSMenu) {
         syncSlider()
+        syncBacklight()
         refresh(engine.lastResolved)
     }
 
@@ -157,6 +195,17 @@ final class MenuController: NSObject, NSMenuDelegate {
         preferences.pausedUntil = nil // touching the slider means "show me", so end any pause
         preferences.nightKelvin = kelvin
         engine.preview(kelvin: kelvin)
+    }
+
+    @objc private func backlightChanged() {
+        let percent = Int(backlightSlider.doubleValue.rounded())
+        backlightTitle.stringValue = "Keyboard backlight: \(percent)%"
+        backlight.brightness = Float(percent) / 100
+    }
+
+    @objc private func toggleBacklightAuto() {
+        backlight.isAutoBrightnessEnabled.toggle()
+        backlightAutoItem.state = backlight.isAutoBrightnessEnabled ? .on : .off
     }
 
     @objc private func openSettings() {
