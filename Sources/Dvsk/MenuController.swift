@@ -20,6 +20,8 @@ final class MenuController: NSObject, NSMenuDelegate {
     private let backlightAutoItem = NSMenuItem(title: "Adjust keyboard in low light", action: #selector(toggleBacklightAuto), keyEquivalent: "")
     private let backlightSeparator = NSMenuItem.separator()
     private let backlight = KeyboardBacklight()
+    private let launchAtLoginItem = NSMenuItem(title: "Launch at login", action: #selector(toggleLaunchAtLogin), keyEquivalent: "")
+    private let loginItem = LoginItem(service: SystemLoginItemService())
 
     // Where macOS draws standard menu item titles and the end of the key-equivalent column.
     private static let leadingInset: CGFloat = 27
@@ -69,6 +71,9 @@ final class MenuController: NSObject, NSMenuDelegate {
         menu.addItem(backlightAutoItem)
         menu.addItem(backlightSeparator)
         syncBacklight()
+
+        launchAtLoginItem.target = self
+        menu.addItem(launchAtLoginItem)
 
         let settings = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
         settings.target = self
@@ -171,7 +176,13 @@ final class MenuController: NSObject, NSMenuDelegate {
     func menuNeedsUpdate(_ menu: NSMenu) {
         syncSlider()
         syncBacklight()
+        syncLaunchAtLogin()
         refresh(engine.lastResolved)
+    }
+
+    /// Asks macOS every time the menu opens, so the tick always matches System Settings.
+    private func syncLaunchAtLogin() {
+        launchAtLoginItem.state = loginItem.state == .on ? .on : .off
     }
 
     // MARK: - Actions
@@ -206,6 +217,16 @@ final class MenuController: NSObject, NSMenuDelegate {
     @objc private func toggleBacklightAuto() {
         backlight.isAutoBrightnessEnabled.toggle()
         backlightAutoItem.state = backlight.isAutoBrightnessEnabled ? .on : .off
+    }
+
+    @objc private func toggleLaunchAtLogin() {
+        // Only a click asks macOS to add or remove Dvsk; nothing does at launch or when the menu opens.
+        guard let message = loginItem.setOn(loginItem.state != .on) else { return }
+        let alert = NSAlert()
+        alert.messageText = "Launch at login"
+        alert.informativeText = message
+        NSApp.activate()
+        alert.runModal()
     }
 
     @objc private func openSettings() {

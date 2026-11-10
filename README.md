@@ -16,6 +16,7 @@ Dvsk changes each display's gamma tables, the same way f.lux does. It is a proof
 - **Night temperature slider:** 1200K to 6500K, with a live preview.
 - **Darkroom mode:** the whole screen goes red, to protect your night vision.
 - **Disable for an hour:** a countdown appears next to the menu bar icon while it's paused.
+- **Launch at login:** an option in the menu bar menu, off until you turn it on. It needs the installed app, so it is unavailable under `swift run`. You can also switch it off in System Settings → General → Login Items & Extensions.
 - **Safe exit:** normal colours come back when you quit, press Ctrl-C or send `kill -TERM`.
 
 ## Requirements
@@ -80,12 +81,12 @@ Or, if you installed the app:
 - Turn off Night Shift (System Settings → Displays) and True Tone, because they stack on top of Dvsk.
 - DisplayLink adapters, AirPlay and some Sidecar setups ignore gamma tables.
 - HDR content can partly bypass the tint.
-- There's no launch at login or sunrise/sunset location support yet.
+- There's no sunrise/sunset location support yet.
 
 ## How it works
 
-- `Sources/DvskCore` holds the colour and schedule logic: converting colour temperature (Kelvin) to RGB, the fixed-time schedule, and choosing the current mode. It's plain Swift and fully unit tested.
-- `Sources/Dvsk` is the app itself. Once a second it works out the target colour, eases toward it, and writes it to every display with `CGSetDisplayTransferByTable`. After sleep or a display change it applies the tint again, and it restores the original colours through ColorSync when you quit.
+- `Sources/DvskCore` holds the colour and schedule logic: converting colour temperature (Kelvin) to RGB, the fixed-time schedule, choosing the current mode, and what the launch-at-login option shows. It's plain Swift and fully unit tested.
+- `Sources/Dvsk` is the app itself. Once a second it works out the target colour, eases toward it, and writes it to every display with `CGSetDisplayTransferByTable`. After sleep or a display change it applies the tint again, and it restores the original colours through ColorSync when you quit. Launch at login goes through macOS's `SMAppService`.
 
 ## Contributing
 
