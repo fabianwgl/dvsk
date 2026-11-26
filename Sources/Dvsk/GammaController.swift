@@ -1,20 +1,15 @@
 import CoreGraphics
 import DvskCore
 
-/// Writes per-display gamma tables: `original * factor`, per channel.
-/// Original tables are captured once per display so repeated applies never compound.
+/// Writes per-display gamma tables by composing Dvsk's tint on top of each display's current
+/// transfer table via `GammaComposer`. External color-table software dimmers (e.g. BetterDisplay,
+/// MonitorControl, Lunar) and live ColorSync profile changes are preserved rather than overwritten.
 final class GammaController {
-    private struct Tables {
-        var red: [CGGammaValue]
-        var green: [CGGammaValue]
-        var blue: [CGGammaValue]
-    }
-
     private static let capacity: UInt32 = 256
-    private var originals: [CGDirectDisplayID: Tables] = [:]
+    private var composer = GammaComposer<CGDirectDisplayID>()
 
     init() {
-        // A previous crashed run may have left a tint behind; never capture that as "original".
+        // A previous crashed run may have left a tint behind; never capture that as a base table.
         CGDisplayRestoreColorSyncSettings()
         refreshDisplays()
     }
@@ -27,16 +22,12 @@ final class GammaController {
         return Array(ids.prefix(Int(count)))
     }
 
-    /// Captures originals for displays seen for the first time and forgets unplugged ones.
+    /// Forgets state for unplugged displays.
     func refreshDisplays() {
-        let active = activeDisplays()
-        originals = originals.filter { active.contains($0.key) }
-        for id in active where originals[id] == nil {
-            if let tables = capture(id) { originals[id] = tables }
-        }
+        composer.prune(keeping: Set(activeDisplays()))
     }
 
-    private func capture(_ display: CGDirectDisplayID) -> Tables? {
+    private func capture(_ display: CGDirectDisplayID) -> GammaTable? {
         var red = [CGGammaValue](repeating: 0, count: Int(Self.capacity))
         var green = red
         var blue = red
@@ -44,22 +35,30 @@ final class GammaController {
         guard CGGetDisplayTransferByTable(display, Self.capacity, &red, &green, &blue, &samples) == .success,
               samples > 0 else { return nil }
         let n = Int(samples)
-        return Tables(red: Array(red.prefix(n)), green: Array(green.prefix(n)), blue: Array(blue.prefix(n)))
+        return GammaTable(red: Array(red.prefix(n)),
+                          green: Array(green.prefix(n)),
+                          blue: Array(blue.prefix(n)))
     }
 
-    func apply(_ rgb: RGB) {
-        let factors = (red: Float(rgb.red), green: Float(rgb.green), blue: Float(rgb.blue))
-        for id in activeDisplays() {
-            if originals[id] == nil, let tables = capture(id) { originals[id] = tables }
-            guard let original = originals[id] else { continue }
-            var red = original.red.map { $0 * factors.red }
-            var green = original.green.map { $0 * factors.green }
-            var blue = original.blue.map { $0 * factors.blue }
-            CGSetDisplayTransferByTable(id, UInt32(red.count), &red, &green, &blue)
+    /// Syncs every active display to `rgb`, writing only when the display's table differs from
+    /// what Dvsk expects (or when `force` is true).
+    func sync(_ rgb: RGB, force: Bool = false) {
+        let active = activeDisplays()
+        composer.prune(keeping: Set(active))
+        for id in active {
+            guard let live = capture(id),
+                  let desired = composer.sync(display: id, liveTable: live, target: rgb, force: force) else {
+                continue
+            }
+            var red = desired.red
+            var green = desired.green
+            var blue = desired.blue
+            CGSetDisplayTransferByTable(id, UInt32(desired.count), &red, &green, &blue)
         }
     }
 
+    /// Restores each display's underlying base table (preserving active software dimming).
     func restore() {
-        CGDisplayRestoreColorSyncSettings()
+        sync(.neutral)
     }
 }

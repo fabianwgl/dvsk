@@ -3,8 +3,8 @@ import Combine
 import CoreGraphics
 import DvskCore
 
-/// Resolves the target look once a second, eases toward it, and re-applies it
-/// whenever macOS may have reset the gamma tables.
+/// Resolves the target look once a second, eases toward it, and syncs the gamma tables
+/// whenever the target changes or an external tool / macOS updates a display's table.
 final class Engine {
     let preferences: Preferences
     private let gamma = GammaController()
@@ -15,9 +15,10 @@ final class Engine {
 
     private var current = RGB.neutral
     private var lastApplied: RGB?
-    private var lastWrite = Date.distantPast
+    private var forceNextWrite = false
 
     private var tickTimer: Timer?
+    private var gammaSyncTimer: Timer?
     private var animationTimer: Timer?
     private var animationStart = RGB.neutral
     private var animationTarget = RGB.neutral
@@ -29,7 +30,7 @@ final class Engine {
     private var isShutDown = false
 
     private static let easeDuration: TimeInterval = 2
-    private static let safetyInterval: TimeInterval = 5
+    private static let gammaCheckInterval: TimeInterval = 0.5
     private static let snapThreshold = 0.01
 
     init(preferences: Preferences) {
@@ -41,6 +42,14 @@ final class Engine {
         let timer = Timer(timeInterval: 1, repeats: true) { [weak self] _ in self?.tick() }
         RunLoop.main.add(timer, forMode: .common) // keeps ticking while a menu is open
         tickTimer = timer
+
+        // Lightweight read-only check so external gamma table changes (e.g. BetterDisplay
+        // software dimming or ColorSync resets) are composed promptly with no redundant writes.
+        let syncTimer = Timer(timeInterval: Self.gammaCheckInterval, repeats: true) { [weak self] _ in
+            self?.syncGammaIfActive()
+        }
+        RunLoop.main.add(syncTimer, forMode: .common)
+        gammaSyncTimer = syncTimer
 
         preferences.objectWillChange
             .sink { [weak self] _ in DispatchQueue.main.async { self?.tick() } }
@@ -76,13 +85,15 @@ final class Engine {
     func reapply() {
         guard !isShutDown else { return }
         lastApplied = nil
+        forceNextWrite = true
         tick()
     }
 
-    /// Stops all work and puts the displays back to their normal colours. Safe to call repeatedly.
+    /// Stops all work and puts the displays back to their pre-tint tables. Safe to call repeatedly.
     func shutdown() {
         isShutDown = true
         tickTimer?.invalidate()
+        gammaSyncTimer?.invalidate()
         animationTimer?.invalidate()
         gamma.restore()
     }
@@ -108,7 +119,7 @@ final class Engine {
             animationTimer?.invalidate()
             animationTimer = nil
             current = target
-            writeIfNeeded(now: now)
+            writeIfNeeded()
         } else if animationTimer == nil || animationTarget.maxDistance(to: target) >= Self.snapThreshold {
             startAnimation(to: target, now: now)
         }
@@ -131,26 +142,26 @@ final class Engine {
         let t = min(1, elapsed / Self.easeDuration)
         let eased = t * t * (3 - 2 * t)
         current = animationStart.interpolated(to: animationTarget, fraction: eased)
-        writeIfNeeded(now: Date())
+        writeIfNeeded()
         if t >= 1 {
             animationTimer?.invalidate()
             animationTimer = nil
         }
     }
 
-    private func writeIfNeeded(now: Date) {
+    private func syncGammaIfActive() {
+        guard !isShutDown, animationTimer == nil, current != RGB.neutral else { return }
+        gamma.sync(current)
+    }
+
+    private func writeIfNeeded() {
         let changed = lastApplied != current
+        let force = forceNextWrite
         let neutral = current == RGB.neutral
-        // The 5 s safety re-apply only matters while a tint is active.
-        let stale = !neutral && now.timeIntervalSince(lastWrite) >= Self.safetyInterval
-        guard changed || stale else { return }
-        if neutral {
-            gamma.restore()
-        } else {
-            gamma.apply(current)
-        }
+        guard changed || force || !neutral else { return }
+        forceNextWrite = false
+        gamma.sync(current, force: force)
         lastApplied = current
-        lastWrite = now
     }
 }
 
