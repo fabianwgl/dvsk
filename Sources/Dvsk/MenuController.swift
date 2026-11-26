@@ -103,9 +103,21 @@ final class MenuController: NSObject, NSMenuDelegate {
         return container
     }
 
+    private var sliderControlsBedtime: Bool {
+        preferences.scheduleMode == .circadian && preferences.state.schedule.phase(at: Date()) == .bedtime
+    }
+
     private func syncSlider() {
-        slider.doubleValue = preferences.nightKelvin
-        sliderTitle.stringValue = "Night temperature: \(Int(preferences.nightKelvin))K"
+        if sliderControlsBedtime {
+            slider.doubleValue = preferences.bedtimeKelvin
+            sliderTitle.stringValue = "Bedtime temperature: \(Int(preferences.bedtimeKelvin))K"
+        } else if preferences.scheduleMode == .circadian {
+            slider.doubleValue = preferences.nightKelvin
+            sliderTitle.stringValue = "Sunset temperature: \(Int(preferences.nightKelvin))K"
+        } else {
+            slider.doubleValue = preferences.nightKelvin
+            sliderTitle.stringValue = "Night temperature: \(Int(preferences.nightKelvin))K"
+        }
     }
 
     /// Re-read on every open: the keyboard brightness keys change it behind our back.
@@ -146,7 +158,13 @@ final class MenuController: NSObject, NSMenuDelegate {
         case .darkroom:
             statusLabelItem.title = "Darkroom"
         case .scheduled:
-            statusLabelItem.title = "\(Int((resolved.kelvin ?? 0).rounded()))K, \(night ? "night" : "day")"
+            let phaseText: String
+            if preferences.scheduleMode == .circadian {
+                phaseText = preferences.state.schedule.phase(at: Date()).label
+            } else {
+                phaseText = night ? "night" : "day"
+            }
+            statusLabelItem.title = "\(Int((resolved.kelvin ?? 0).rounded()))K, \(phaseText)"
         }
 
         enabledItem.state = preferences.isEnabled ? .on : .off
@@ -202,9 +220,17 @@ final class MenuController: NSObject, NSMenuDelegate {
 
     @objc private func sliderChanged() {
         let kelvin = (slider.doubleValue / 10).rounded() * 10
-        sliderTitle.stringValue = "Night temperature: \(Int(kelvin))K"
         preferences.pausedUntil = nil // touching the slider means "show me", so end any pause
-        preferences.nightKelvin = kelvin
+        if sliderControlsBedtime {
+            sliderTitle.stringValue = "Bedtime temperature: \(Int(kelvin))K"
+            preferences.bedtimeKelvin = kelvin
+        } else if preferences.scheduleMode == .circadian {
+            sliderTitle.stringValue = "Sunset temperature: \(Int(kelvin))K"
+            preferences.nightKelvin = kelvin
+        } else {
+            sliderTitle.stringValue = "Night temperature: \(Int(kelvin))K"
+            preferences.nightKelvin = kelvin
+        }
         engine.preview(kelvin: kelvin)
     }
 

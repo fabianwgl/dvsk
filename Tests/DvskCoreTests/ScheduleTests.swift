@@ -182,4 +182,55 @@ final class ScheduleTests: XCTestCase {
         XCTAssertEqual(schedule.targetKelvin(at: instant, calendar: calendar), 6500, accuracy: accuracy)
         XCTAssertEqual(schedule.targetKelvin(at: instant, calendar: tokyo), 2700, accuracy: accuracy)
     }
+
+    // MARK: Three-phase circadian schedule
+
+    func testWinterCircadianThreePhasesIncludingPreSunriseStep() {
+        var paris = Calendar(identifier: .gregorian)
+        paris.timeZone = TimeZone(identifier: "Europe/Paris")!
+        let schedule = Schedule(mode: .circadian,
+                                transitionMinutes: 30,
+                                dayKelvin: 6500,
+                                nightKelvin: 3400,
+                                bedtimeKelvin: 1900,
+                                wakeTime: TimeOfDay(hour: 7, minute: 0),
+                                bedtimeHoursBeforeWake: 9,
+                                latitude: 48.8566,
+                                longitude: 2.3522)
+
+        // Nov 26 in Paris: sunrise ~08:16, sunset ~16:59, bedtime 22:00..07:00.
+        let preSunrise = date(7, 30, calendar: paris, month: 11, day: 26)
+        let midday = date(12, 0, calendar: paris, month: 11, day: 26)
+        let evening = date(19, 30, calendar: paris, month: 11, day: 26)
+        let bedtime = date(23, 30, calendar: paris, month: 11, day: 26)
+
+        XCTAssertEqual(schedule.targetKelvin(at: preSunrise, calendar: paris), 3400, accuracy: accuracy)
+        XCTAssertEqual(schedule.phase(at: preSunrise, calendar: paris), .sunset)
+        XCTAssertEqual(schedule.targetKelvin(at: midday, calendar: paris), 6500, accuracy: accuracy)
+        XCTAssertEqual(schedule.phase(at: midday, calendar: paris), .daytime)
+        XCTAssertEqual(schedule.targetKelvin(at: evening, calendar: paris), 3400, accuracy: accuracy)
+        XCTAssertEqual(schedule.phase(at: evening, calendar: paris), .sunset)
+        XCTAssertEqual(schedule.targetKelvin(at: bedtime, calendar: paris), 1900, accuracy: accuracy)
+        XCTAssertEqual(schedule.phase(at: bedtime, calendar: paris), .bedtime)
+    }
+
+    func testSummerCircadianStaysWarmUntilWakeEvenAfterSunrise() {
+        var paris = Calendar(identifier: .gregorian)
+        paris.timeZone = TimeZone(identifier: "Europe/Paris")!
+        let schedule = Schedule(mode: .circadian,
+                                transitionMinutes: 30,
+                                dayKelvin: 6500,
+                                nightKelvin: 3400,
+                                bedtimeKelvin: 1900,
+                                wakeTime: TimeOfDay(hour: 7, minute: 0),
+                                bedtimeHoursBeforeWake: 9,
+                                latitude: 48.8566,
+                                longitude: 2.3522)
+
+        // June 21 in Paris: sunrise ~05:47, sunset ~21:57, bedtime 22:00..07:00.
+        let afterSunriseBeforeWake = date(6, 20, calendar: paris, month: 6, day: 21)
+        let afterWake = date(7, 30, calendar: paris, month: 6, day: 21)
+        XCTAssertEqual(schedule.targetKelvin(at: afterSunriseBeforeWake, calendar: paris), 1900, accuracy: accuracy)
+        XCTAssertEqual(schedule.targetKelvin(at: afterWake, calendar: paris), 6500, accuracy: accuracy)
+    }
 }
