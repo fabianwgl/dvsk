@@ -58,16 +58,20 @@ struct SettingsView: View {
 
             // Keep both tabs mounted so AppKit controls (TextField, DatePicker) are never
             // torn down and recreated on toggle, making mode switching instantaneous.
+            // The hidden one is disabled so it leaves the key-view loop: Tab and the window's
+            // initial first responder can't land on a control the user can't see.
             ZStack(alignment: .topLeading) {
                 fixedSection
                     .opacity(isFixed ? 1 : 0)
                     .allowsHitTesting(isFixed)
                     .accessibilityHidden(!isFixed)
+                    .disabled(!isFixed)
 
                 circadianSection
                     .opacity(isFixed ? 0 : 1)
                     .allowsHitTesting(!isFixed)
                     .accessibilityHidden(isFixed)
+                    .disabled(isFixed)
             }
         }
         .padding(18)
