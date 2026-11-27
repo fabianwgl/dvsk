@@ -150,7 +150,9 @@ final class Engine {
     }
 
     private func syncGammaIfActive() {
-        guard !isShutDown, animationTimer == nil, current != RGB.neutral else { return }
+        // At neutral, keep polling until every restore is confirmed by a readback.
+        guard !isShutDown, animationTimer == nil,
+              current != RGB.neutral || gamma.hasPendingRestore else { return }
         gamma.sync(current)
     }
 

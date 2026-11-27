@@ -86,7 +86,7 @@ Or, if you installed the app:
 ## How it works
 
 - `Sources/DvskCore` holds the colour and schedule logic: converting colour temperature (Kelvin) to RGB, the fixed-time schedule, choosing the current mode, and what the launch-at-login option shows. It's plain Swift and fully unit tested.
-- `Sources/Dvsk` is the app itself. Once a second it works out the target colour, eases toward it, and writes it to every display with `CGSetDisplayTransferByTable`. After sleep or a display change it applies the tint again, and it restores the original colours through ColorSync when you quit. Launch at login goes through macOS's `SMAppService`.
+- `Sources/Dvsk` is the app itself. Once a second it works out the target colour, eases toward it, and writes it to every display with `CGSetDisplayTransferByTable`. It composes its tint on top of whatever table is on each display, so colour-table software dimmers (BetterDisplay, MonitorControl, Lunar) keep working. After sleep or a display change it applies the tint again. When it returns to neutral or you quit, it puts back the table that was under the tint, and falls back to ColorSync if that write fails at quit. Launch at login goes through macOS's `SMAppService`.
 
 ## Contributing
 

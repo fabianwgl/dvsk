@@ -45,72 +45,117 @@ public struct GammaTable: Equatable, Sendable {
 /// Composes Dvsk's tint on top of each display's current gamma table without compounding
 /// and without clobbering external color-table dimmers (e.g. BetterDisplay, MonitorControl, Lunar)
 /// or live ColorSync profile changes.
+///
+/// Usage: call `plan` with the table read back from a display; if it returns a table, write it and
+/// call `didWrite` only when the write succeeded. Nothing is recorded as on screen until then, so a
+/// failed write is retried on the next `plan` instead of being mistaken for an external change.
+///
+/// A display has state only while Dvsk's tint may be on it: from the first tint until a readback
+/// confirms the base table is back (or another app has replaced the table).
 public struct GammaComposer<DisplayID: Hashable> {
+    /// The table under Dvsk's tint, restored when returning to neutral.
     private var bases: [DisplayID: GammaTable] = [:]
-    private var lastWritten: [DisplayID: GammaTable] = [:]
+    /// Tables Dvsk wrote to the display since `bases` was captured, newest last. A live table that
+    /// matches any of them is Dvsk's own (including a newer write the display silently dropped).
+    private var written: [DisplayID: [GammaTable]] = [:]
+    private let historyLimit = 4
     public let tolerance: Float
 
     public init(tolerance: Float = 0.005) {
         self.tolerance = tolerance
     }
 
-    /// Forgets state for displays that are no longer active.
-    public mutating func prune(keeping activeIDs: Set<DisplayID>) {
-        bases = bases.filter { activeIDs.contains($0.key) }
-        lastWritten = lastWritten.filter { activeIDs.contains($0.key) }
+    /// Displays that may still show Dvsk's tint.
+    public var trackedDisplays: Set<DisplayID> { Set(written.keys) }
+
+    /// True while a display may still show Dvsk's tint, so a neutral restore is not yet confirmed.
+    public var hasPendingRestore: Bool { !written.isEmpty }
+
+    /// Forgets state for displays that are no longer online. An empty list is ignored, since it
+    /// usually means the display list could not be read rather than that every display is gone.
+    public mutating func prune(keeping onlineIDs: Set<DisplayID>) {
+        guard !onlineIDs.isEmpty else { return }
+        bases = bases.filter { onlineIDs.contains($0.key) }
+        written = written.filter { onlineIDs.contains($0.key) }
+    }
+
+    /// Forgets one display.
+    public mutating func forget(_ display: DisplayID) {
+        bases.removeValue(forKey: display)
+        written.removeValue(forKey: display)
     }
 
     /// Clears all remembered state (for example after a full ColorSync reset).
     public mutating func resetAll() {
         bases.removeAll()
-        lastWritten.removeAll()
+        written.removeAll()
     }
 
     /// Given the table currently loaded on `display` and the desired `target` RGB multiplier,
     /// returns the table to write to the display, or `nil` when no write is needed.
+    /// The returned table is not recorded as on screen until `didWrite` is called.
     ///
     /// - Parameter force: When true, returns the desired table even if `liveTable` already
-    ///   matches it (useful right after wake when readback may briefly lag).
-    public mutating func sync(display: DisplayID,
+    ///   matches it (useful right after wake when readback may briefly lag). At neutral it rewrites
+    ///   the base table of any display that may still be tinted.
+    public mutating func plan(display: DisplayID,
                               liveTable: GammaTable,
                               target: RGB,
                               force: Bool = false) -> GammaTable? {
         guard !liveTable.isEmpty else { return nil }
+        let ours = isOurs(liveTable, on: display)
 
         if target == RGB.neutral {
-            guard let written = lastWritten.removeValue(forKey: display) else {
-                // Already neutral; leave whatever is on the display untouched.
+            guard written[display] != nil, let base = bases[display] else {
+                // Dvsk has not tinted this display; leave whatever is on it untouched.
                 return nil
             }
-            if liveTable.isApproximatelyEqual(to: written, tolerance: tolerance) {
-                // Nobody else replaced our tint; restore the preserved base table.
-                return bases[display]
-            } else {
-                // Another app or macOS already replaced the table; adopt it and do not overwrite.
-                bases[display] = liveTable
-                return nil
+            if liveTable.isApproximatelyEqual(to: base, tolerance: tolerance) {
+                // Readback confirms the restore.
+                forget(display)
+                return force ? base : nil
             }
+            if ours || force {
+                // Our tint is still there (or the restore write was lost): write the base again.
+                // State is kept until a readback confirms it.
+                return base
+            }
+            // Another app or macOS already replaced the table; leave it alone.
+            forget(display)
+            return nil
         }
 
-        if let written = lastWritten[display] {
-            if !liveTable.isApproximatelyEqual(to: written, tolerance: tolerance) {
-                // An external tool (software dimmer, profile change, wake reset) wrote a new table.
-                bases[display] = liveTable
-            }
-        } else {
-            // Transitioning away from neutral or seeing this display for the first time.
+        if written[display] == nil || !ours {
+            // First tint, or an external tool (software dimmer, profile change, wake reset)
+            // wrote a new table: that table becomes the base.
             bases[display] = liveTable
+            written[display] = []
         }
 
         guard let base = bases[display] else { return nil }
         let desired = base.tinted(by: target)
-        let alreadyApplied = lastWritten[display] != nil
-            && liveTable.isApproximatelyEqual(to: desired, tolerance: tolerance)
-
-        lastWritten[display] = desired
-        if alreadyApplied && !force {
+        if !force, ours, liveTable.isApproximatelyEqual(to: desired, tolerance: tolerance) {
+            // Readback shows the desired table is already on screen.
+            record(desired, on: display)
             return nil
         }
         return desired
+    }
+
+    /// Records that `table` was successfully written to `display`.
+    public mutating func didWrite(_ table: GammaTable, to display: DisplayID) {
+        guard written[display] != nil else { return }
+        record(table, on: display)
+    }
+
+    private func isOurs(_ live: GammaTable, on display: DisplayID) -> Bool {
+        written[display]?.contains { live.isApproximatelyEqual(to: $0, tolerance: tolerance) } ?? false
+    }
+
+    private mutating func record(_ table: GammaTable, on display: DisplayID) {
+        var history = written[display] ?? []
+        if history.last != table { history.append(table) }
+        if history.count > historyLimit { history.removeFirst(history.count - historyLimit) }
+        written[display] = history
     }
 }
