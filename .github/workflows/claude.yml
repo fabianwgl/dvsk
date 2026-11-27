@@ -37,8 +37,19 @@ jobs:
         with:
           fetch-depth: 1
 
+      # The action's own installer downloads from downloads.claude.ai, which
+      # answers this VPS with 403 "not available in your location". The npm
+      # registry works, so install there, one copy per runner (tool cache).
+      - name: Install Claude Code via npm
+        id: claude_code
+        run: |
+          npm install -g --prefix "$RUNNER_TOOL_CACHE/claude-code" --no-fund --no-audit @anthropic-ai/claude-code@latest
+          "$RUNNER_TOOL_CACHE/claude-code/bin/claude" --version
+          echo "bin=$RUNNER_TOOL_CACHE/claude-code/bin/claude" >> "$GITHUB_OUTPUT"
+
       - name: Run Claude Code
         id: claude
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          path_to_claude_code_executable: ${{ steps.claude_code.outputs.bin }}
